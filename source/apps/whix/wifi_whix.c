@@ -2055,6 +2055,7 @@ static void whix_common_config_to_monitor_queue(wifi_monitor_data_t *data, bool 
 
 static void config_radio_channel_util(wifi_monitor_data_t *data)
 {
+#if 0
     unsigned int radioIndex = 0;
     wifi_mgr_t *wifi_mgr = get_wifimgr_obj();
     wifi_event_route_t route;
@@ -2072,10 +2073,12 @@ static void config_radio_channel_util(wifi_monitor_data_t *data)
         wifi_util_dbg_print(WIFI_APPS, "pushing the event to collect chan_util\n");
         push_event_to_monitor_queue(data, wifi_event_monitor_data_collection_config, &route);
     }
+#endif
 }
 
 static void config_radio_channel_stats(wifi_monitor_data_t *data)
 {
+#if 0
     unsigned int radioIndex = 0;
     wifi_mgr_t *wifi_mgr = get_wifimgr_obj();
     wifi_event_route_t route;
@@ -2095,6 +2098,7 @@ static void config_radio_channel_stats(wifi_monitor_data_t *data)
         wifi_util_dbg_print(WIFI_APPS, "pushing the event %s\n", __func__);
         push_event_to_monitor_queue(data, wifi_event_monitor_data_collection_config, &route);
     }
+#endif
 }
 
 static void config_associated_device_stats(wifi_monitor_data_t *data)
