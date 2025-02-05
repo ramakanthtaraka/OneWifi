@@ -2123,6 +2123,7 @@ static void config_associated_device_stats(wifi_monitor_data_t *data)
 
 static void config_radio_diag_stats(wifi_monitor_data_t *data)
 {
+#if 0
     unsigned int radio_index;
     wifi_mgr_t *wifi_mgr = get_wifimgr_obj();
     wifi_event_route_t route;
@@ -2144,6 +2145,7 @@ static void config_radio_diag_stats(wifi_monitor_data_t *data)
             wifi_mgr->radio_config[radio_index].vaps.radio_index;
         push_event_to_monitor_queue(data, wifi_event_monitor_data_collection_config, &route);
     }
+#endif
 }
 
 static void update_rejected_client_stats(wifi_app_t *app, void *data)
@@ -2269,10 +2271,8 @@ static int push_whix_config_event_to_monitor_queue(wifi_mon_stats_request_state_
     memset(data, 0, sizeof(wifi_monitor_data_t));
     data->u.mon_stats_config.req_state = state;
 
-#if 0
     config_radio_channel_stats(data);
     config_radio_channel_util(data);
-#endif
 
     memset(data, 0, sizeof(wifi_monitor_data_t));
     data->u.mon_stats_config.req_state = state;
