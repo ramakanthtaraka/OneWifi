@@ -3238,7 +3238,9 @@ int provider_execute_task(void *arg)
     } else {
         route.dst = wifi_sub_component_core;
     }
-    push_monitor_response_event_to_ctrl_queue(response, sizeof(wifi_provider_response_t), wifi_event_type_monitor, wifi_event_monitor_provider_response, &route);
+
+     //Test change to to debug the leak if its causing by the ctrl queue
+    //push_monitor_response_event_to_ctrl_queue(response, sizeof(wifi_provider_response_t), wifi_event_type_monitor, wifi_event_monitor_provider_response, &route);
 
     elem->response = response;
     free(elem->response);
