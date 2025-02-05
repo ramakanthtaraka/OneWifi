@@ -2269,8 +2269,10 @@ static int push_whix_config_event_to_monitor_queue(wifi_mon_stats_request_state_
     memset(data, 0, sizeof(wifi_monitor_data_t));
     data->u.mon_stats_config.req_state = state;
 
+#if 0
     config_radio_channel_stats(data);
     config_radio_channel_util(data);
+#endif
 
     memset(data, 0, sizeof(wifi_monitor_data_t));
     data->u.mon_stats_config.req_state = state;
