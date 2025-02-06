@@ -2099,6 +2099,7 @@ static void config_radio_channel_stats(wifi_monitor_data_t *data)
 
 static void config_associated_device_stats(wifi_monitor_data_t *data)
 {
+#if 0
     unsigned int radio_index;
     unsigned int vapArrayIndex = 0;
     wifi_mgr_t *wifi_mgr = get_wifimgr_obj();
@@ -2119,6 +2120,7 @@ static void config_associated_device_stats(wifi_monitor_data_t *data)
             }
         }
     }
+#endif
 }
 
 static void config_radio_diag_stats(wifi_monitor_data_t *data)
