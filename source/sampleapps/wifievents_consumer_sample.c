@@ -47,6 +47,11 @@
 #define WIFI_EVENT_CONSUMER_DGB(msg, ...) \
     wifievents_consumer_dbg_print("%s:%d  " msg "\n", __func__, __LINE__, ##__VA_ARGS__);
 
+#define WIFI_SAMPLE_DUMP(msg, ...) \
+     wifi_sample_dump_func(msg, ##__VA_ARGS__);
+
+FILE *sample_dump_fptr = NULL;
+
 FILE *g_fpg = NULL;
 
 char g_component_name[RBUS_MAX_NAME_LENGTH];
@@ -75,6 +80,8 @@ uint32_t g_csi_index = 0;
 int g_clientdiag_interval = 0;
 int g_disable_csi_log = 0;
 int g_rbus_direct_enabled = 0;
+int g_num_of_samples = -1;
+int g_sample_counter = 0;
 
 static void wifievents_get_device_vaps()
 {
@@ -323,6 +330,36 @@ static void csiMacListHandler(rbusHandle_t handle, rbusEvent_t const *event,
     UNREFERENCED_PARAMETER(handle);
 }
 
+static void wifi_sample_dump_func(char *format, ...)
+{
+    va_list list;
+
+	if (g_num_of_samples == -1) {
+		return;
+	}
+
+#ifdef LINUX_VM_PORT
+    va_start(list, format);
+    vprintf(format, list);
+    va_end(list);
+#else
+    if (sample_dump_fptr == NULL) {
+        sample_dump_fptr = fopen("/tmp/csi_samples.txt", "a+");
+        if (sample_dump_fptr == NULL) {
+            printf("Failed to open file\n");
+            return;
+        }
+    }
+
+    va_start(list, format);
+    vfprintf(sample_dump_fptr, format, list);
+    va_end(list);
+    fflush(sample_dump_fptr);
+#endif
+    return;
+}
+
+
 void rotate_and_write_CSIData(mac_address_t sta_mac, wifi_csi_data_t *csi)
 {
 #define MB(x) ((long int)(x) << 20)
@@ -380,6 +417,28 @@ void rotate_and_write_CSIData(mac_address_t sta_mac, wifi_csi_data_t *csi)
         rename(filename_tmp, filename);
     }
 
+    WIFI_SAMPLE_DUMP("\ncsi_matrix : \n");
+	//sc = subcarriers; nr = antennas; nc = stream;
+	unsigned int sc_count, nr_count, nc_count;
+	for (sc_count = 0; sc_count < csi->frame_info.num_sc; sc_count++) {
+		WIFI_SAMPLE_DUMP("Subcarrier-%u:\n", sc_count);
+		WIFI_SAMPLE_DUMP("       ");
+		for (nc_count = 0; nc_count < csi->frame_info.Nc; nc_count++) {
+			WIFI_SAMPLE_DUMP("|Stream-%-7u|", nc_count);
+		}
+		WIFI_SAMPLE_DUMP("\n");
+
+		for (nr_count = 0; nr_count < csi->frame_info.Nr; nr_count++) {
+            WIFI_SAMPLE_DUMP("Ant-%02u | ", nr_count);
+			for (nc_count = 0; nc_count < csi->frame_info.Nc; nc_count++) {
+				WIFI_SAMPLE_DUMP( "0x%04x/0x%04x ", (((csi->csi_matrix[sc_count][nr_count][nc_count])>>16) & 0xFFFF),  ((csi->csi_matrix[sc_count][nr_count][nc_count]) & 0xFFFF));
+			}
+			WIFI_SAMPLE_DUMP("\n");
+		}
+		WIFI_SAMPLE_DUMP("\n");
+	}
+	WIFI_SAMPLE_DUMP("\n");
+
     WIFI_EVENT_CONSUMER_DGB("Exit %s: %d\n", __FUNCTION__, __LINE__);
 }
 
@@ -409,11 +468,15 @@ static void print_csi_data(char *buffer)
     memcpy(csilabel, data_ptr, 4);
     data_ptr = data_ptr + 4;
     WIFI_EVENT_CONSUMER_DGB("%s\n", csilabel);
+    WIFI_SAMPLE_DUMP("\n==========================================================\n");
+    WIFI_SAMPLE_DUMP( "sample num : %d %s\n", g_sample_counter, csilabel);
+ 
 
     // Total length:  <length of this entire data field as an unsigned int>
     memcpy(&total_length, data_ptr, sizeof(unsigned int));
     data_ptr = data_ptr + sizeof(unsigned int);
     WIFI_EVENT_CONSUMER_DGB("total_length %u\n", total_length);
+    WIFI_SAMPLE_DUMP("total_length %u\n", total_length);
 
     // DataTimeStamp:  <date-time, number of seconds since the Epoch>
     memcpy(&datetime, data_ptr, sizeof(time_t));
@@ -421,11 +484,13 @@ static void print_csi_data(char *buffer)
     memset(buf, 0, sizeof(buf));
     ctime_r(&datetime, buf);
     WIFI_EVENT_CONSUMER_DGB("datetime %s\n", buf);
+    WIFI_SAMPLE_DUMP("datetime %s\n", buf);
 
     // NumberOfClients:  <unsigned int number of client devices>
     memcpy(&num_csi_clients, data_ptr, sizeof(unsigned int));
     data_ptr = data_ptr + sizeof(unsigned int);
     WIFI_EVENT_CONSUMER_DGB("num_csi_clients %u\n", num_csi_clients);
+    WIFI_SAMPLE_DUMP("num_csi_clients %u\n", num_csi_clients);
 
     // clientMacAddress:  <client mac address>
     memcpy(&sta_mac, data_ptr, sizeof(mac_address_t));
@@ -433,14 +498,24 @@ static void print_csi_data(char *buffer)
     WIFI_EVENT_CONSUMER_DGB("==========================================================");
     WIFI_EVENT_CONSUMER_DGB("MAC %02x%02x%02x%02x%02x%02x\n", sta_mac[0], sta_mac[1], sta_mac[2],
         sta_mac[3], sta_mac[4], sta_mac[5]);
+    WIFI_SAMPLE_DUMP("MAC %02x%02x%02x%02x%02x%02x\n", sta_mac[0], sta_mac[1], sta_mac[2],
+        sta_mac[3], sta_mac[4], sta_mac[5]);
 
     // length of client CSI data:  <size of the next field in bytes>
     memcpy(&csi_data_length, data_ptr, sizeof(unsigned int));
     data_ptr = data_ptr + sizeof(unsigned int);
     WIFI_EVENT_CONSUMER_DGB("csi_data_length %u\n", csi_data_length);
+    WIFI_SAMPLE_DUMP("csi_data_length %u\n", csi_data_length);
 
     //<client device CSI data>
     memcpy(&csi, data_ptr, sizeof(wifi_csi_data_t));
+
+    WIFI_SAMPLE_DUMP("bw_mode %d, mcs %d, Nr %d, Nc %d, valid_mask %hu, phy_bw %hu, cap_bw "
+                            "%hu, num_sc %hu, decimation %d, channel %d, cfo %d, time_stamp %llu",
+        csi.frame_info.bw_mode, csi.frame_info.mcs, csi.frame_info.Nr, csi.frame_info.Nc,
+        csi.frame_info.valid_mask, csi.frame_info.phy_bw, csi.frame_info.cap_bw,
+        csi.frame_info.num_sc, csi.frame_info.decimation, csi.frame_info.channel,
+        csi.frame_info.cfo, csi.frame_info.time_stamp);
 
     // Writing the CSI data to /tmp/CSI.bin
     rotate_and_write_CSIData(sta_mac, &csi);
@@ -455,10 +530,13 @@ static void print_csi_data(char *buffer)
 
     // Printing rssii
     WIFI_EVENT_CONSUMER_DGB("rssi values on each Nr are");
-    for (itr = 0; itr <= csi.frame_info.Nr; itr++) {
+    WIFI_SAMPLE_DUMP("rssi values on each Nr are : ");
+    for (itr = 0; itr < csi.frame_info.Nr; itr++) {
         WIFI_EVENT_CONSUMER_DGB("%d...", csi.frame_info.nr_rssi[itr]);
+        WIFI_SAMPLE_DUMP("%d ", csi.frame_info.nr_rssi[itr]);
     }
     WIFI_EVENT_CONSUMER_DGB("==========================================================");
+    WIFI_SAMPLE_DUMP("\n==========================================================\n");
     return;
 }
 
@@ -701,7 +779,7 @@ static bool parseArguments(int argc, char **argv)
     bool ret = true;
     char *p;
 
-    while ((c = getopt(argc, argv, "he:s:v:i:c:f:")) != -1) {
+    while ((c = getopt(argc, argv, "he:s:v:i:c:f:n:")) != -1) {
         switch (c) {
         case 'h':
             printf("HELP :  wifi_events_consumer -e [numbers] - default all events\n"
@@ -721,6 +799,7 @@ static bool parseArguments(int argc, char **argv)
                    "-i [csi data interval] - default %dms min %d max %d\n"
                    "-c [client diag interval] - default %dms\n"
                    "-f [debug file name] - default /tmp/wifiEventConsumer\n"
+                   "-n [number of samples]"
                    "Example: wifi_events_consumer -e 1,2,3,7 -s 1 -v 1,2,13,14\n"
                    "touch /nvram/wifiEventsAppCSILogDisable to disable CSI detail log\n"
                    "touch /nvram/wifiEventsAppCSIRBUSDirect to enable RBUS Direct for CSI data\n",
@@ -768,6 +847,14 @@ static bool parseArguments(int argc, char **argv)
                 ret = false;
             }
             snprintf(g_debug_file_name, RBUS_MAX_NAME_LENGTH, "/tmp/%s", optarg);
+            break;
+        case 'n':
+            if (!optarg || atoi(optarg) <= 0) {
+                printf(" Failed to parse number of samples: %s\n", optarg);
+                ret = false;
+            }
+            g_num_of_samples = atoi(optarg);
+            printf(" number of samples to be collected : %d\n", g_num_of_samples);
             break;
         case '?':
             printf("Supposed to get an argument for this option or invalid option\n");
@@ -1063,6 +1150,15 @@ int main(int argc, char *argv[])
                     if (numRead > 0) {
                         WIFI_EVENT_CONSUMER_DGB("CSI\n");
                         print_csi_data(buffer);
+                        if (g_num_of_samples != -1) {
+                            g_sample_counter++;
+
+                            if (g_sample_counter >= g_num_of_samples) {
+								printf("collected samples : %d, exiting program\n", g_sample_counter);
+								fclose(sample_dump_fptr);
+								goto exit2;
+                            }
+                        }
                     }
                 }
                 if (FD_ISSET(lvel_pipe_read_fd, &readfds)) {
